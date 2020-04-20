@@ -1,0 +1,576 @@
+1. _ModifyAccountGroup.cshtml Line 4
+ <div class="panel panel-default panel-primary2" id="addGrpPnl">
+ 
+ 2.AccountGroup.js Line 14
+  if(userData.InstituteId!='300010')
+            $('#addGrpPnl').hide();
+			
+3. _AccountGroupList.cshtml  Line 16
+
+<tr>
+                                <th>Group Id</th>
+                                <th>Group Name</th>
+                                <th>Under Group</th>
+                                <th>Nature</th>
+                                <th>Edit</th>
+                                <th>Delete</th>
+                                <th>Enable</th>---adsed this
+                            </tr>
+							
+							
+4. AccountGroup.js Line 152 Added new button for enable  and disable
+
+ {
+                 "title": "Enable/Disable",
+                 "data": "AccountGroupId",
+                 "searchable": false,
+                 "sortable": false,
+                 "className": "tr-edit",
+                 "render": function (data, type, full, meta) {
+                     if (userData.IsEnableGroupPage && full.IsEnable == '1') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-success btn-padding" id="btnDisable">Disable</a>';
+                     }
+                     else if (userData.IsEnableGroupPage && full.IsEnable == '0') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-danger btn-padding" id="btnEnable">Enable</a>';
+                     }
+                     else
+                         return '';
+                 }
+             }
+
+5. AccountGroup.js Line 212 add new method 	enableAccountGroup		
+
+6. Add new method EnableAccountGroup in AdminController.cs
+
+7. Add new method  EnableAccountGroup in AdminManager.cs
+
+8.Add new method AccountGroupEnableById in AccountsAppApi.cs
+
+9.Update web reference in AccountsAppWeb.Core to call AccountGroupEnableById method
+
+10. alter table Accounts.AccountGroup to add new column IsEnable as below:
+
+alter table Accounts.AccountGroup
+add IsEnable int not null Default 0
+
+11. alter existing view Accounts.vAccountGroup to add nw column IsEnable as below:
+
+alter view Accounts.vAccountGroup as
+SELECT        AGM.AccountGroupId, AGM.AccountGroupName, AGM.AccountGroupNameAlias, AGM.GroupUnder, AGM.Narration, AGM.IsDefault, AGM.Nature, AGM.AffectGrossProfit, AGM.IsActive, AGM.IsAdminGroup, Accounts.AccountGroup.Id, 
+                         Accounts.AccountGroup.InstId, AGM2.AccountGroupName AS UnderGroupTitle,Accounts.AccountGroup.IsEnable
+FROM            Accounts.AccountGroupMaster AS AGM LEFT OUTER JOIN
+                         Accounts.AccountGroupMaster AS AGM2 ON AGM.GroupUnder = AGM2.AccountGroupId INNER JOIN
+                         Accounts.AccountGroup ON Accounts.AccountGroup.AccountGroupId = AGM.AccountGroupId
+
+
+			
+12.Create new procedure with name Accounts.AccountGroupEnableById	
+
+create proc  Accounts.AccountGroupEnableById
+(@AccountGroupId int,  
+@IsEnable int)  
+AS  
+ 
+IF(@IsEnable=1)  
+BEGIN  
+update Accounts.vAccountGroup set IsEnable =@IsEnable where AccountGroupId=@AccountGroupId;
+ SELECT 1,'Account Group enabled successfully' as Title  
+END  
+ELSE  
+BEGIN  
+update Accounts.vAccountGroup set IsEnable =@IsEnable where AccountGroupId=@AccountGroupId;
+SELECT 0,'Account Group disabled successfully' as Title   
+END 
+
+13.	update AccountGroup.js file and changes done in line 66 loadAccountGroupList() method 
+change  ajax: {
+            url: "GetAccountGroupsList",
+            dataSrc: ''
+        },
+		
+		to below:
+		{
+                 "title": "Enable/Disable",
+                 "data": "AccountGroupId",
+                 "searchable": false,
+                 "sortable": false,
+                 "className": "tr-edit",
+                 "render": function (data, type, full, meta) {
+                     if (userData.IsEnableGroupPage && full.IsEnable == '1') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-success btn-padding" id="btnDisable">Disable</a>';
+                     }
+                     else if (userData.IsEnableGroupPage && full.IsEnable == '0') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-danger btn-padding" id="btnEnable">Enable</a>';
+                     }
+                     else
+                         return '';
+                 }
+             }
+      
+    },
+	
+	14. Update [Accounts].[GetAccountGroup] procedure to select isenable as well from select query 
+	
+	ALTER proc  [Accounts].[GetAccountGroup]    
+(    
+@InstId int    
+)    
+as    
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId    
+ORDER BY AccountGroupName 
+
+15.Add new property isEnable in AccountGroupListModel class as below:
+
+namespace AccountsAppWeb.Core.Models
+{
+    public class AccountGroupListModel
+    {
+        public int AccountGroupId { get; set; }
+        public string AccountGroupName { get; set; }
+        public string UnderGroupTitle { get; set; }
+        public string Nature { get; set; } 
+        public int IsEnable { get; set; }   
+    }
+}
+
+16. Update [Accounts].[GetAccountGroup] procedure again to distinguish between admin display and normal display
+
+ALTER proc  [Accounts].[GetAccountGroup]    
+(    
+@InstId int    
+)    
+as  
+IF(@InstId=300010)  
+BEGIN   
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId    
+ORDER BY AccountGroupName 
+END  
+ELSE  
+BEGIN 
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1   
+ORDER BY AccountGroupName  
+END
+
+17.  C:\D-Drive\Datanew1\uploadfilestodev\kccaccounts.com\Scripts\CustomScripts\SingleLedgerAccountBook.js(192):        url: '/Admin/GetAccountGroupsList',
+  C:\D-Drive\Datanew1\uploadfilestodev\kccaccounts.com\Scripts\CustomScripts\SingleLedgerAccountBook.js(192):        url: '/Admin/GetAccountGroupsList',
+  
+
+  18. Update Update [Accounts].[GetAccountGroup] procedure again to distinguish between account group page display and account ledger display
+  
+  ALTER proc  [Accounts].[GetAccountGroup]    
+(    
+@InstId int,
+@showInLedger int  //this is passed
+)    
+as  
+IF(@InstId=300010 and @showInLedger=0)  
+BEGIN   
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId    
+ORDER BY AccountGroupName 
+END  
+ELSE  
+BEGIN 
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1   
+ORDER BY AccountGroupName  
+END
+
+19.Add parameter showInLedger in all method and files from where GetAccountGroup and GetAccountGroupList called.
+
+20. Update web reference and rebuild project
+
+21.Add new property IsCommonGroup inside AccountGroupModel.cs to make group common for ledger
+
+22.Add new checkbox IsCommonGroup inside _ModifyAccountGroup.cshtml as below:
+
+                       <div class="col-md-12">
+                                <label>IsGroupCommon</label>
+                                @Html.CheckBoxFor(model => model.IsCommonGroup)
+                            </div>
+
+23. Add new column IsCommonGroup in AccountGroup table as below:
+
+alter table Accounts.AccountGroup
+add IsCommonGroup bit not null Default 0
+
+23.update method InsertAccountGroup in AdminManager.cs class to pass IsCommonGroup parameter to call to InsertAccountGroup function in AccountsAppApi class.
+
+24. Changes done in InsertAccountGroup method in AccountsAppApi class in else block comment AccountGroup code stuff and call to new method InsertAccountGroupById
+to put data in AccountGroup table.
+
+25.Create new method InsertAccountGroupById in AccountsAppApi.cs class
+
+26. create  proc  Accounts.InsertAccountGroupById
+(@AccountGroupId int, 
+@InstId int,
+@IsEnable int, 
+@IsCommonGroup bit
+
+)  
+AS  
+ delete from Accounts.AccountGroup where AccountGroupId=@AccountGroupId
+insert into Accounts.AccountGroup(AccountGroupId,InstId,IsEnable,IsCommonGroup) values (@AccountGroupId,@InstId,@IsEnable,@IsCommonGroup)
+
+27.alter view Accounts.vAccountGroup to include IsCommonGroup in select as below:
+
+alter view Accounts.vAccountGroup as
+SELECT        AGM.AccountGroupId, AGM.AccountGroupName, AGM.AccountGroupNameAlias, AGM.GroupUnder, AGM.Narration, AGM.IsDefault, AGM.Nature, AGM.AffectGrossProfit, AGM.IsActive, AGM.IsAdminGroup, Accounts.AccountGroup.Id, 
+                         Accounts.AccountGroup.InstId, AGM2.AccountGroupName AS UnderGroupTitle,Accounts.AccountGroup.IsEnable,Accounts.AccountGroup.IsCommonGroup
+FROM            Accounts.AccountGroupMaster AS AGM LEFT OUTER JOIN
+                         Accounts.AccountGroupMaster AS AGM2 ON AGM.GroupUnder = AGM2.AccountGroupId INNER JOIN
+                         Accounts.AccountGroup ON Accounts.AccountGroup.AccountGroupId = AGM.AccountGroupId
+
+28.create new method UpdateAccountGroupById in AccountsAppApi.cs to update IsCommonGroup
+
+29. Call to UpdateAccountGroupById method from InsertAccountGroup if block in AccountsAppApi.cs class.
+
+30.Create new procedure Accounts.UpdateAccountGroupById
+
+create  proc  Accounts.UpdateAccountGroupById
+(@AccountGroupId int,
+@IsCommonGroup bit)  
+AS  
+update  Accounts.VAccountGroup set IsCommonGroup=@IsCommonGroup where AccountGroupId=@AccountGroupId
+
+31.Add new property IsCommonGroup in AccountGroupModel.cs class as below:
+
+ public class AccountGroupListModel
+    {
+        public int AccountGroupId { get; set; }
+        public string AccountGroupName { get; set; }
+        public string UnderGroupTitle { get; set; }
+        public string Nature { get; set; } 
+        public int IsEnable { get; set; }
+       public bool IsCommonGroup { get; set; }
+    }
+	
+	32. Update reference of AccountApp web and core projects to kcc account project and rebuild .
+	
+	33. Update stored procedure [Accounts].[GetAccountGroup]  to include IsCommonGroup in search 
+	
+	ALTER proc  [Accounts].[GetAccountGroup]    
+(    
+@InstId int,
+@showInLedger int  
+)    
+as  
+IF(@InstId=300010 and @showInLedger=0)  
+BEGIN   
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId    
+ORDER BY AccountGroupName 
+END  
+ELSE  
+BEGIN 
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1   
+ORDER BY AccountGroupName  
+END
+
+34.Update stored procedure [Accounts].[GetAccountGroup]  to exclude  IsCommonGroup using IsCommonGroup=0
+	
+
+ALTER proc  [Accounts].[GetAccountGroup]    
+(    
+@InstId int,
+@showInLedger int  
+)    
+as  
+IF(@InstId=300010 and @showInLedger=0)  //to show AccountGroup on AccountGroup Page of admin ie 300010.this will be all groups
+BEGIN   
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId    
+ORDER BY AccountGroupName 
+END  
+ELSE  IF(@InstId=300010 and @showInLedger=1)   // to show AccountGroup on AccountLedger Page of admin ie 300010 .This will be all enable ones.
+BEGIN 
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1
+ORDER BY AccountGroupName  
+END
+ELSE  //to show AccountGroup on AccountGroup Page and AccountLedger Page for non admin ie for all other institution.This will be all enable ones and non common ones.Common groups only shown for admin.
+BEGIN
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,    
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup    
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1 and IsCommonGroup=0  
+ORDER BY AccountGroupName  
+END
+
+.................................................
+
+Now work for AccountLedger
+
+1. _AccountLedgerList.cshtml  Line 18
+
+ <tr>
+                                <th>Ledger Id</th>
+                                <th width="300px">Ledger Name</th>
+                                <th>Group</th>
+                                <th>Opening Balance</th>
+                                <th>Cr/Dr</th>
+                                <th>Org Name</th>
+                                <th>Edit</th>
+                                <th>Delete</th>
+                                <th>Enable</th>--add this
+                            </tr>
+							
+2. AccountLedger.js Line 127 Added new button for enable  and disable
+
+   {
+                 "title": "Enable/Disable",
+                 "data": "LedgerId",
+                 "searchable": false,
+                 "sortable": false,
+                 className: "tr-edit",
+                 "render": function (data, type, full, meta) {
+                     if (userData.IsOpeningBalanceEditAllow && full.IsEnable == '1') {
+                         return '<a href="#" onClick="enableAccountLedger(' + full.LedgerId + ',' + full.IsEnable + ')" class="btn btn-success btn-padding" id="btnDisable">Disable</a>';
+                     }
+                     else if (userData.IsOpeningBalanceEditAllow && full.IsEnable == '0') {
+                         return '<a href="#" onClick="enableAccountLedger(' + full.LedgerId + ',' + full.IsEnable + ')" class="btn btn-danger btn-padding" id="btnEnable">Enable</a>';
+                     }
+                     else
+                         return '';
+                 }
+             }
+			 
+3. AccountLedger.js Line 213 add new method 	enableAccountLedger		
+
+4. Add new method EnableAccountLedger in AdminController.cs
+
+5. Add new method  EnableAccountLedger in AdminManager.cs
+
+6.Add new method AccountLedgerEnableById in AccountsAppApi.cs
+
+7.Update web reference in AccountsAppWeb.Core to call AccountGroupEnableById method
+
+8. alter table Accounts.AccountLedger to add new column IsEnable as below:
+
+alter table Accounts.AccountLedger
+add IsEnable int not null Default 0
+
+11. alter existing view Accounts.vAccountLedger to add nw column IsEnable as below:
+
+alter view Accounts.vAccountLedger as
+SELECT        AL.Id, AL.DepartmentId, AL.InstId, AL.LedgerId, ALM.AccountGroupId, ALM.LedgerName, ALM.LedgerNameAlias, ALM.LedgerNamePrint, ALM.IsAdminLedger, ALM.IsDefault, ALM.CrOrDr, ALM.Narration, ALM.Address, ALM.Phone, 
+                         ALM.Mobile, ALM.Email, ALM.TIN, ALM.CST, ALM.PAN, ALM.IsActive, ALM.InsertUserAccountId, ALM.InsertDate, ALM.UpdateDate, ALM.UpdateUserAccountId, ALM.UserAccountId, AG.AccountGroupName, AL.ForInstId, 
+                         ISNULL(ALM.IsUnderSecretary, 0) AS IsUnderSecretary, dbo.vInst_Info.AccountShortTitle AS Inst_ShortTitle, dbo.vInst_Info.AccountInstTitle AS Inst_Title, AL.NotificationToInstId, AL.NotificationToLedgerId,AL.IsEnable
+FROM            dbo.vInst_Info LEFT OUTER JOIN
+                         Accounts.AccountLedgerMaster AS ALM INNER JOIN
+                         Accounts.AccountLedger AS AL ON ALM.LedgerId = AL.LedgerId INNER JOIN
+                         Accounts.AccountGroupMaster AS AG ON AG.AccountGroupId = ALM.AccountGroupId ON dbo.vInst_Info.Inst_Id = AL.ForInstId
+
+
+			
+12.Create new procedure with name Accounts.AccountLedgerEnableById	
+
+create proc  Accounts.AccountLedgerEnableById
+(@LedgerId int,  
+@IsEnable int)  
+AS  
+ 
+IF(@IsEnable=1)  
+BEGIN  
+update Accounts.vAccountLedger set IsEnable =@IsEnable where LedgerId=@LedgerId;
+ SELECT 1,'Account Ledger enabled successfully' as Title  
+END  
+ELSE  
+BEGIN  
+update Accounts.vAccountLedger set IsEnable =@IsEnable where LedgerId=@LedgerId;
+SELECT 0,'Account Ledger disabled successfully' as Title   
+END  
+
+13. Update [Accounts].[AccountLedgerForTransaction] procedure to select isenable as well from select query 
+	
+alter proc  [Accounts].[AccountLedgerForTransaction]    
+(  
+@GroupId int,  
+@InstId int,  
+@DepartmentId int,  
+@FinancialYearId int  
+)  
+AS    
+  
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,  
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,  
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,  
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable  
+FROM Accounts.vAccountLedger    
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId  
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId  
+WHERE InstId=@InstId  
+ORDER BY LedgerName  
+
+14.Add new property isEnable in AccountLedgerListViewModel class as below:
+
+namespace AccountsAppWeb.Core.Models
+{
+    public class AccountLedgerListViewModel
+    {
+        public int LedgerId { get; set; }
+        public string LedgerName { get; set; }
+        public string AccountGroupName { get; set; }
+        public string Inst_ShortTitle { get; set; }
+        public string CrOrDr { get; set; }
+        public decimal OpeningBalance { get; set; }
+       public int IsEnable { get; set; }
+    }
+}
+
+15.Add parameter ShowInTransactionPage in all method and files from where GetAccountLedger and GetAccountLedgerList called.
+
+16. Update web reference and rebuild project
+
+17. Changes done in AccountLedger.js,AddTransaction.js,ModifyTransactions.js files to pass parameter ShowInTransactionPage
+
+18. Update stored procedure [Accounts].[AccountLedgerForTransaction]  to pass  parameter ShowInTransactionPage and to show that on transaction page as per parameter
+
+alter proc  [Accounts].[AccountLedgerForTransaction]    
+(  
+@GroupId int,  
+@InstId int,  
+@DepartmentId int,  
+@FinancialYearId int,
+@ShowInTransactionPage int  
+)  
+AS    
+IF(@ShowInTransactionPage=0)  
+BEGIN    
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,  
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,  
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,  
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable  
+FROM Accounts.vAccountLedger    
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId  
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId  
+WHERE InstId=@InstId
+ORDER BY LedgerName
+END
+ELSE
+BEGIN
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,  
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,  
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,  
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable  
+FROM Accounts.vAccountLedger    
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId  
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId  
+WHERE InstId=@InstId  and IsEnable=1 //put isenable check for transaction page
+ORDER BY LedgerName
+END  
+
+19. Update table Accounts.AccountLedger to include IsCommonLedger column
+
+alter table Accounts.AccountLedger
+add IsCommonLedger int not null Default 0
+
+20.Alter view Accounts.vAccountLedger to have IsCommonLedger column in select statement.
+
+alter view Accounts.vAccountLedger as
+SELECT        AL.Id, AL.DepartmentId, AL.InstId, AL.LedgerId, ALM.AccountGroupId, ALM.LedgerName, ALM.LedgerNameAlias, ALM.LedgerNamePrint, ALM.IsAdminLedger, ALM.IsDefault, ALM.CrOrDr, ALM.Narration, ALM.Address, ALM.Phone, 
+                         ALM.Mobile, ALM.Email, ALM.TIN, ALM.CST, ALM.PAN, ALM.IsActive, ALM.InsertUserAccountId, ALM.InsertDate, ALM.UpdateDate, ALM.UpdateUserAccountId, ALM.UserAccountId, AG.AccountGroupName, AL.ForInstId, 
+                         ISNULL(ALM.IsUnderSecretary, 0) AS IsUnderSecretary, dbo.vInst_Info.AccountShortTitle AS Inst_ShortTitle, dbo.vInst_Info.AccountInstTitle AS Inst_Title, AL.NotificationToInstId, AL.NotificationToLedgerId,AL.IsEnable,AL.IsCommonLedger
+FROM            dbo.vInst_Info LEFT OUTER JOIN
+                         Accounts.AccountLedgerMaster AS ALM INNER JOIN
+                         Accounts.AccountLedger AS AL ON ALM.LedgerId = AL.LedgerId INNER JOIN
+                         Accounts.AccountGroupMaster AS AG ON AG.AccountGroupId = ALM.AccountGroupId ON dbo.vInst_Info.Inst_Id = AL.ForInstId
+						 
+21. Create new method UpdateAccountLedgerById in AccountsApi.cs to update IsCommonLedger column in Accounts.vAccountLedger
+public DataSet UpdateAccountLedgerById(string SKey, int LedgerId)
+    {
+        try
+        {
+            param = new SqlParameter[1];
+            param[0] = new SqlParameter("@LedgerId", LedgerId);
+            ds = SqlHelper.ExecuteDataset(con, CommandType.StoredProcedure, "Accounts.UpdateAccountLedgerById", param);
+            return ds;
+        }
+        catch(Exception ex)
+        {
+return ds; }
+    }
+	
+	22.Call this method (UpdateAccountLedgerById)from line 1109 in function InsertAccountLedger.This is for new created ledger.
+	23. Create new procedure  Accounts.UpdateAccountLedgerById as below:
+	
+	create  proc  Accounts.UpdateAccountLedgerById
+(@LedgerId int)  
+AS 
+DECLARE @AccountGroupId int;
+DECLARE @IsCommonGroup bit; 
+
+SET @AccountGroupId= (select AccountGroupId from Accounts.vAccountLedger where ledgerId=@LedgerId)
+
+  SET @IsCommonGroup= (select IsCommonGroup from Accounts.vAccountGroup where AccountGroupId=@AccountGroupId and InstId=300010)
+
+update Accounts.vAccountLedger set IsCommonLedger=@IsCommonGroup where LedgerId=@LedgerId
+
+24. Call this method(UpdateAccountLedgerById) from line 1060 in function InsertAccountLedger.This is for updating existing ledger.
+
+25. Update stored procedure [Accounts].[AccountLedgerForTransaction]  to  show ledgers on transaction page that are enable and that are common.
+
+alter proc  [Accounts].[AccountLedgerForTransaction]    
+(  
+@GroupId int,  
+@InstId int,  
+@DepartmentId int,  
+@FinancialYearId int,
+@ShowInTransactionPage int  
+)  
+AS    
+IF(@ShowInTransactionPage=0)  
+BEGIN    
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,  
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,  
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,  
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable  
+FROM Accounts.vAccountLedger    
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId  
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId  
+WHERE InstId=@InstId
+ORDER BY LedgerName
+END
+ELSE
+BEGIN
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,  
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,  
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,  
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable  
+FROM Accounts.vAccountLedger    
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId  
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId  
+WHERE (InstId=@InstId  and IsEnable=1) --show ledger that are enable for that institution
+or (IsEnable=1 and IsCommonLedger=1)--show common leger for all intituion that are  enable
+ORDER BY LedgerName
+END  
+
+26.update stored procedure Accounts.UpdateAccountGroupById to update the ledger as well everytime when AccountGroup associate with that ledger gets updated.
+Means whenever IsCommonGroup column  of Accounts.VAccountGroup gets updated then also updated IsCommonLedger column of Accounts.AccountLedger below:
+
+alter  proc  Accounts.UpdateAccountGroupById
+(@AccountGroupId int,
+@IsCommonGroup bit)  
+AS  
+update  Accounts.VAccountGroup set IsCommonGroup=@IsCommonGroup where AccountGroupId=@AccountGroupId
+
+update Accounts.vAccountLedger set IsCommonLedger=@IsCommonGroup where AccountGroupId=@AccountGroupId
+
+ 
+
+							
+
+						 
+			

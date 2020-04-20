@@ -1,0 +1,254 @@
+1. First of all we need to do changes in master.js file so that common income expenditure report option only shown under 2020-2021 financial year 
+and only for admin ie 300010 as below:
+
+if (instituteId == 300010) {
+        $('#menuChangePassword').addClass('visibility');
+        $('#menuGeneralRevenueReport').addClass('visibility');
+        $('#menuScheduleWiseReprt').addClass('visibility');
+        $('#menuPermission').addClass('visibility');
+        $('#menuViewPassword').addClass('visibility');
+         if (userData.FinancialYearId == '9') {// this change is done
+            $('#commonIncomeExpenditureReprt').css("display", "block");
+        else
+            $('#commonIncomeExpenditureReprt').css("display", "none");
+    }
+	
+	2. In AccountGroup.js hide enable / disable button for all other financial yearid except 9 as below:(inside customscripts)
+	
+	 if (userData.IsEnableGroupPage && full.IsEnable == '1' && userData.FinancialYearId=='9') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-success btn-padding" id="btnDisable">Disable</a>';
+                     }
+                     else if (userData.IsEnableGroupPage && full.IsEnable == '0' && userData.FinancialYearId == '9') {
+                        return '<a href="#" onClick="enableAccountGroup(' + full.AccountGroupId + ',' + full.IsEnable + ')" class="btn btn-danger btn-padding" id="btnEnable">Enable</a>';
+                     }
+					 
+					 
+	3.Now we need to pass financial year as parameter in all files in whuch we are getting Accountgroup that is in GetAccountGroup method
+	
+	a. In AccountLedger.js file at line 131  inside loadddlAccountGroup method ----ignore this file not need to upload
+data: { showInLedger: '1', financialYearId: userData.FinancialYearId },
+     b.In AccountGroup.js file at line 25 inside loaddropdownsOnLoad method
+	 data: { showInLedger: '0', financialYearId: userData.FinancialYearId },
+	 
+	 c.In AccountGroup.js  at line 118  inside loadAccountGroupList method in ajax call
+	 data: { showInLedger: '0', financialYearId: userData.FinancialYearId },
+	 
+	 d.In AccountGroup.js  at line 196  inside editAccountGroup method 
+	  data: { groupId: groupId, showInLedger: '0', financialYearId: userData.FinancialYearId },
+	  
+	 e.In AccountLedger.js at line 155  inside loadddlAccountGroup method
+	 data: { showInLedger: '1', financialYearId: userData.FinancialYearId },
+	 
+	 f.In ScheduledWiseReport.js at line 94  inside loadddlAccountGroup method
+	   data: {  showInLedger: '0',financialYearId: userData.FinancialYearId },
+	 
+	 g.In SingleLedgerAccountBook.js at line 193  inside loadddlAccountGroup method
+	   data: {  showInLedger: '0',financialYearId: userData.FinancialYearId },
+	 
+	 h. In AdminController.cs at Line 98
+	  public JsonResult GetAccountGroupsList(int showInLedger=0, int financialYearId). Also remove =0 in showledger
+	  
+	 i. In AdminController.cs at Line 108
+	  public JsonResult GetAccountGroup(int groupId, int showInLedger, int financialYearId). Also remove =0 in showledger
+	  
+4. Now in AccountsAppApi add new parameter financialYearId at Line 549 in GetAccountGroup function as below:
+
+public DataSet GetAccountGroup(string SKey, int InstId, int showInLedger,int financialYearId)
+    {
+        param = new SqlParameter[3];
+        param[0] = new SqlParameter("@InstId", InstId);
+        param[1] = new SqlParameter("@showInLedger", showInLedger);
+        param[2] = new SqlParameter("@financialYearId", financialYearId);
+        ds = SqlHelper.ExecuteDataset(con, CommandType.StoredProcedure, "Accounts.GetAccountGroup", param);
+
+        return ds;
+    }
+	
+	5. Pass financialYearId in AdminController.cs at Line 100
+	var groupList = adminManager.GetAccountGroupsList(UserManager.User.InstituteId, showInLedger,financialYearId);
+	
+	6.Pass financialYearId in AdminController.cs at Line 110
+	 var accountLedger = adminManager.GetAccountGroup(UserManager.User.InstituteId, groupId, showInLedger,financialYearId);
+	
+	7. Update [Accounts].[GetAccountGroup] stored procedure and pass financialyear id as parameter
+	
+	ALTER proc  [Accounts].[GetAccountGroup]      
+(      
+@InstId int,  
+@showInLedger int ,
+@financialYearId int   
+)      
+as
+IF(@financialYearId!=9)  --start of outer if
+BEGIN
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,  
+ IsNull(Narration,' ') as Narration FROM Accounts.vAccountGroup  
+WHERE AccountGroupId>0 and InstId=@InstId  
+ORDER BY AccountGroupName  
+END 
+ELSE-- start of outer else
+BEGIN  
+IF(@InstId=300010 and @showInLedger=0)  --to show AccountGroup on AccountGroup Page of admin ie 300010.this will be all groups  
+BEGIN     
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,      
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup      
+WHERE AccountGroupId>0 and InstId=@InstId      
+ORDER BY AccountGroupName   
+END    
+ELSE  IF(@InstId=300010 and @showInLedger=1)   --to show AccountGroup on AccountLedger Page of admin ie 300010 .This will be all enable ones.  
+BEGIN   
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,      
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup      
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1  
+ORDER BY AccountGroupName    
+END  
+ELSE  --to show AccountGroup on AccountGroup Page and AccountLedger Page for non admin ie for all other institution.This will be all enable ones and non common ones.Common groups only shown for admin.  
+BEGIN  
+SELECT AccountGroupId,AccountGroupName,Nature,IsAdminGroup,UnderGroupTitle,AccountGroupNameAlias,      
+ IsNull(Narration,' ') as Narration,IsEnable,IsCommonGroup FROM Accounts.vAccountGroup      
+WHERE AccountGroupId>0 and InstId=@InstId and IsEnable=1 and IsCommonGroup=0    
+ORDER BY AccountGroupName    
+END
+END---End of outer if 
+
+
+8.In _ModifyAccountGroup.cshtml at line 37 provide id cmGrp
+ <div class="col-md-12" id="cmGrp">
+                                <label>IsGroupCommon</label>
+                                @Html.CheckBoxFor(model => model.IsCommonGroup)
+                            </div>
+						
+9.In master.js show hide this common group checkbox based on financialYearId
+ if (userData.FinancialYearId == '9') {
+            $('#commonIncomeExpenditureReprt').css("display", "block");
+            $('#cmGrp').css("display", "block");
+        }
+        else {
+            $('#commonIncomeExpenditureReprt').css("display", "none");
+            $('#cmGrp').css("display", "none");
+        }
+
+10.	In AccountLedger.js hide enable / disable button for all other financial yearid except 9 as below: Line 138
+if (userData.IsOpeningBalanceEditAllow && full.IsEnable == '1' && userData.FinancialYearId == '9') {
+                         return '<a href="#" onClick="enableAccountLedger(' + full.LedgerId + ',' + full.IsEnable + ')" class="btn btn-success btn-padding" id="btnDisable">Disable</a>';
+                     }
+                     else if (userData.IsOpeningBalanceEditAllow && full.IsEnable == '0' && userData.FinancialYearId == '9') {
+                         return '<a href="#" onClick="enableAccountLedger(' + full.LedgerId + ',' + full.IsEnable + ')" class="btn btn-danger btn-padding" id="btnEnable">Enable</a>';
+                     }
+					 
+11.Changes done in [Accounts].[AccountLedgerForTransaction]  stored procedure to pass @FinancialYearId!=9 in if condition 
+
+---- EXEC [Accounts].[AccountLedgerForTransaction] 0,300010,0,4    
+    
+ALTER proc  [Accounts].[AccountLedgerForTransaction]      
+(    
+@GroupId int,    
+@InstId int,    
+@DepartmentId int,    
+@FinancialYearId int,  
+@ShowInTransactionPage int    
+)    
+AS      
+IF(@ShowInTransactionPage=0 or @FinancialYearId!=9)    
+BEGIN      
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,    
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,    
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,    
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable    
+FROM Accounts.vAccountLedger      
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId    
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId    
+WHERE InstId=@InstId  
+ORDER BY LedgerName  
+END  
+ELSE  
+BEGIN  
+SELECT InstId,LedgerId,AccountGroupId,LedgerName,LedgerNameAlias,LedgerNamePrint,IsAdminLedger,    
+IsDefault,CrOrDr,Narration,Address,Phone,Mobile,Email,TIN,CST,PAN,AccountGroupName,    
+CONVERT(DECIMAL(17,2), IsNull(OB_OpeningBalance,0)) as OpeningBalance,IsNull(OB_CrOrDr,CrOrDr) as OB_CrOrDr,    
+ForInstId,Inst_ShortTitle,Inst_Title,IsUnderSecretary ,IsEnable    
+FROM Accounts.vAccountLedger      
+LEFT JOIN Accounts.AccountLedgerOpeningBalance ON  OB_InstId=@InstId    
+AND OB_LedgerId=Ledgerid AND OB_FinancialYearId=@FinancialYearId AND ForInstId=ob_ForInstId    
+WHERE (InstId=@InstId  and IsEnable=1) --show ledger that are enable for that institution  
+or (IsEnable=1 and IsCommonLedger=1)--show common leger for all intituion that are  enable  
+ORDER BY LedgerName  
+END 
+
+12. Now changes needs to be done for create /edit account group.In AdminController.cs Pass financial parameter inside CreateOrUpdateAccountGroup function on line 141 and 150
+
+var isInserted = adminManager.InsertAccountGroup(Convert.ToInt32(user.UserName), user.InstituteId, isModify, accountGroupModel,user.FinancialYearId);
+var isUpdated = adminManager.InsertAccountGroup(Convert.ToInt32(user.UserName), user.InstituteId, isModify, accountGroupModel, user.FinancialYearId);	
+
+
+13. In AdminManager.cs add financialYearId parameter at line 140.
+ public bool InsertAccountGroup(int userId, int instituteId, bool IsModify, AccountGroupModel groupModel,int financialYearId)
+
+14. In AdminManager.cs pass financialYearId parameter in accountsAppAPI.InsertAccountGroup function call at line 156
+return accountsAppAPI.InsertAccountGroup(sKey, new AccountGroupMaster()
+            {
+                AccountGroupId = groupModel.AccountGroupId,
+                AccountGroupName = groupModel.AccountGroupName,
+                AccountGroupNameAlias = groupModel.AccountGroupNameAlias,
+                GroupUnder = groupModel.GroupUnder,
+                IsDefault = true,
+                Nature = groupModel.Nature,
+                AffectGrossProfit = true,
+                InsertUserAccountId = userId,
+                InsertDate = DateTime.Now,
+                UpdateUserAccountId = userId,
+                UpdateDate = DateTime.Now,
+                IsAdminGroup = false
+            }, instituteId, IsModify,groupModel.IsCommonGroup,financialYearId);
+			
+15.	In accountsAppAPI.cs InsertAccountGroup add parameter financialYearId
+public bool InsertAccountGroup(string SKey, AccountGroupMaster Ac, int InstId, bool IsModify,bool IsCommonGroup, int financialYearId)
+
+16.Update web reference
+
+17. In accountsAppAPI.cs  inside InsertAccountGroup method add if condition at line 893 and 911
+if(financialYearId.Equals(9))
+                UpdateAccountGroupById(SKey, Ac.AccountGroupId,IsCommonGroup);
+				
+				if (financialYearId.Equals(9))
+                    InsertAccountGroupById(SKey,Ac.AccountGroupId,InstId,IsCommonGroup);
+					
+18. Now changes needs to be done for create /edit account ledger. In AccountsAppApi.cs Line 1032 add financialYearId parameter 
+public bool InsertAccountLedger(string SKey, AccountLedgerMaster alm, AccountLedger AL, AccountLedgerOpeningBalance ob, bool IsModify, int OldForInstId,int financialYearId)
+
+19. Pass financialYearId parameter to InsertAccountLedger function calling from AdminManager.cs Line 112
+   }, IsModify, instituteId,financialYearId);
+
+20.In accountsAppAPI.cs add 2 if condition in InsertAccountLedger method at line 1063 for update and line 1113 for new 
+ if(financialYearId.Equals(9))
+                UpdateAccountLedgerById(SKey, alm.LedgerId);
+if (financialYearId.Equals(9))
+                UpdateAccountLedgerById(SKey, alm.LedgerId);				
+ 
+		
+					 
+
+
+ 
+
+
+
+
+
+ 
+ 
+ 
+ 
+ 
+
+		
+
+
+
+   
+	  
+	  
+	  
+	 
+	 
+	 

@@ -1,0 +1,438 @@
+1.In _Layout.cshtml file add new line in list for commonincome expenditure report as below:
+ <li id="commonIncomeExpenditureReprt">
+  <a href="/Reports/CommonIncomeExpenditureDetails">Common Income Expenditure A/C</a>
+ </li>
+2. Add new view with name  CommonIncomeExpenditure Details.cshtml
+3.Add new .js file with name CommonIncomeExpenditureDetails.js
+4.In ReportsController.cs add new method CommonIncomeExpenditureDetails to render view for common report
+ public ActionResult CommonIncomeExpenditureDetails()
+        {
+            return View();
+        }
+5. Changes done in master.js to show hide this commonIncomeExpenditureReprt menu or tab as below:
+function setPermissions(instituteId) {
+    if (instituteId == 300010) {
+        $('#menuChangePassword').addClass('visibility');
+        $('#menuGeneralRevenueReport').addClass('visibility');
+        $('#menuScheduleWiseReprt').addClass('visibility');
+        $('#menuPermission').addClass('visibility');
+        $('#menuViewPassword').addClass('visibility');
+        $('#commonIncomeExpenditureReprt').css("display", "block");
+    }
+    else {
+        $('#menuChangePassword').addClass('novisibility');
+        $('#menuGeneralRevenueReport').addClass('novisibility');
+        $('#menuScheduleWiseReprt').addClass('novisibility');
+        $('#menuPermission').addClass('novisibility');
+        $('#menuViewPassword').addClass('novisibility');
+        $('#commonIncomeExpenditureReprt').css("display", "none");
+    }
+
+}
+6.Create new method GenerateCommonIncomeExpenditureDetails in ReportsController.cs Line 60
+
+7. Create new method CreateLedgerCommonIncomeExpendituteCollegeGroupFoReport in ReportsManager.cs Line 428
+
+8. Create new method CreateLedgerCommonIncomeExpendituteCollegeGroup in AccountsAppApi.cs Line 1495.
+
+9.Create new store procedure [Accounts].[CreateLedgerCommonIncomeExpenditute] 
+
+ --EXEC [Accounts].[CreateLedgerCommonIncomeExpenditute] 1,300010,0,8,1,0,'4/1/2019','3/25/2020',1,300010,0,'a27e61d6-2052-4a59-9ba0-1ef7fff027f8',0    
+ 
+create proc  [Accounts].[CreateLedgerCommonIncomeExpenditute]  
+(  
+@GroupId int,  
+@InstId int,   
+@DepartmentId int,  
+@FinancialYearId int,  
+@IsShowZeroBalance bit='False',  
+@ShowOnlyOpeningBalaces bit='False', -- It is a Special Report  
+@FromDate datetime,  
+@ToDate datetime,  
+@IsIncomeExpenditure bit='False',  
+@ForInstId int,  
+@AccountGroupId int=0,  
+@Guid varchar(50),  
+@IsShowOnlyOpeningBalacesJas bit='False', -- It is a Special Report,  
+@IsIncludeAllChild bit='True',  
+@IsDepreciation bit='false'  
+  
+)  
+AS  
+SET NOCOUNT ON  
+  
+DECLARE @MyTempGuid varchar(50)=(SELECT NEWID())  
+IF @AccountGroupId=0 SET @AccountGroupId=NULL  
+IF @ForInstId=0 SET @ForInstId=NULL  
+  
+DECLARE  @MyYTable as table  
+(  
+[Id] [int] IDENTITY(1,1) NOT NULL,  
+OpeningBalance decimal(18,2),  
+OpeningBalanceCrOrDr VARCHAR(10),  
+Debit DECIMAL(18,2),  
+Credit DECIMAL(18,2),  
+IsLedger bit,  
+AccountId Int,  
+AccountGroupName varchar(200),  
+ForInstId int  
+)  
+  
+if(@ShowOnlyOpeningBalaces='0') -- Statement of Accounts  
+BEGIN  
+  
+IF (@IsIncomeExpenditure=0)  
+BEGIN  
+ ---------- AccountLedger in which accounts Transaction has insert  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId)  
+SELECT 0,'',CASE WHEN   
+(SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))> (SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0)) THEN   
+(SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))-(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))  
+ELSE NULL END AS Debit  
+,CASE WHEN   
+(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))> (SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))  THEN   
+(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))- (SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))  
+ELSE NULL END AS Credit,'true',ALM.LedgerId,ALM.LedgerName,ISNULL(@ForInstId,0) as ForInstId  
+FROM  ACCOUNTS.vTransactionDetails as VTD   
+INNER JOIN Accounts.AccountLedgerMaster AS ALM ON VTD.LedgerId=ALM.LedgerId  
+LEFT JOIN Accounts.vAccountLedgerOpeningBalance AS OB ON VTD.FinancialYearId= OB.OB_FinancialYearId  
+AND VTD.InstId=OB.OB_InstId AND VTD.ForInstId=ISNULL(@ForInstId,VTD.ForInstId) AND VTD.LedgerId=OB.OB_LedgerId  
+WHERE VTD.InstId=@InstId and VTD.FinancialYearId=@FinancialYearId  
+AND VTD.TransactionDate>=@FromDate AND VTD.TransactionDate<=@ToDate AND VTD.AccountGroupId=ISNULL(@AccountGroupId,VTD.AccountGroupId)  
+GROUP BY ALM.LedgerId,ALM.LedgerName,OpeningBalanceDebit,OpeningBalanceCredit  
+END   
+  
+IF (@IsIncomeExpenditure=1)  
+BEGIN  
+ ---------- AccountLedger in which accounts Transaction has insert  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId)  
+SELECT 0,'',CASE WHEN   
+(SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))> (SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0)) THEN   
+(SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))-(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))  
+ELSE NULL END AS Debit  
+,CASE WHEN   
+(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))> (SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))  THEN   
+(SUM(isnull(CREDIT,0))+isnull(OpeningBalanceCredit,0))- (SUM(isnull(DEBIT,0))+isnull(OpeningBalanceDebit,0))  
+ELSE NULL END AS Credit,'true',ALM.LedgerId,ALM.LedgerName,VTD.ForInstId  
+FROM  ACCOUNTS.vTransactionDetails as VTD   
+INNER JOIN Accounts.AccountLedgerMaster AS ALM ON VTD.LedgerId=ALM.LedgerId  
+LEFT JOIN Accounts.vAccountLedgerOpeningBalance AS OB ON VTD.FinancialYearId= OB.OB_FinancialYearId AND VTD.ForInstId=ob.ob_ForInstId  
+AND VTD.InstId=OB.OB_InstId --AND VTD.ForInstId=ISNULL(@ForInstId,VTD.ForInstId) 
+AND VTD.LedgerId=OB.OB_LedgerId  
+WHERE 
+--VTD.InstId=@InstId and 
+VTD.FinancialYearId=@FinancialYearId  
+AND VTD.TransactionDate>=@FromDate AND VTD.TransactionDate<=@ToDate AND VTD.AccountGroupId=ISNULL(@AccountGroupId,VTD.AccountGroupId)  
+GROUP BY ALM.LedgerId,ALM.LedgerName,OpeningBalanceDebit,OpeningBalanceCredit,VTD.ForInstId  
+END   
+  
+  
+  
+  
+if (@IsShowOnlyOpeningBalacesJas='0')  
+begin  
+  
+IF (@IsIncomeExpenditure=0)  
+BEGIN  
+  
+ --- AccountLedger in which accounts Transaction not insert and Only Opening balance  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId )  
+SELECT 0,'',ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,'true',OB.OB_LedgerId,ALM.LedgerName,ISNULL(@ForInstId,0) as ForInstId  
+FROM Accounts.vAccountLedgerOpeningBalance as  OB  
+INNER JOIN Accounts.vAccountLedger AS ALM ON OB.OB_LedgerId=ALM.LedgerId  AND ALM.ForInstId=ob.ob_ForInstId AND ALM.InstId=@InstId  
+WHERE ALM.ForInstId>0 and ALM.ForInstId=ISNULL(@ForInstId,ALM.ForInstId)  
+AND OB.OB_FinancialYearId=@FinancialYearId AND OB.OB_InstId=CONVERT(int, @InstId)  
+AND ALM.AccountGroupId=ISNULL(@AccountGroupId,ALM.AccountGroupId)  
+AND NOT EXISTS (SELECT TD.TransactionMasterId FROM Accounts.vTransactionDetails AS TD  
+WHERE TD.InstId=OB.OB_InstId  AND TD.FinancialYearId=OB.OB_FinancialYearId  
+AND TD.LedgerId=OB.OB_LedgerId )  
+GROUP BY ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,OB.OB_LedgerId,ALM.LedgerName---,ALM.ForInstId  
+END  
+  
+IF (@IsIncomeExpenditure=1)  
+BEGIN  
+  
+  
+ --- AccountLedger in which accounts Transaction not insert and Only Opening balance  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId )  
+SELECT 0,'',ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,'true',OB.OB_LedgerId,ALM.LedgerName,ALM.ForInstId  
+FROM Accounts.vAccountLedgerOpeningBalance as  OB  
+INNER JOIN Accounts.vAccountLedger AS ALM ON OB.OB_LedgerId=ALM.LedgerId  AND ALM.ForInstId=ob.ob_ForInstId AND ALM.InstId=@InstId  
+WHERE ALM.ForInstId>0 
+--and ALM.ForInstId=ISNULL(@ForInstId,ALM.ForInstId)  
+AND OB.OB_FinancialYearId=@FinancialYearId 
+--AND OB.OB_InstId=CONVERT(int, @InstId)  
+AND ALM.AccountGroupId=ISNULL(@AccountGroupId,ALM.AccountGroupId)  
+AND NOT EXISTS (SELECT TD.TransactionMasterId FROM Accounts.vTransactionDetails AS TD  
+WHERE TD.InstId=OB.OB_InstId  AND TD.FinancialYearId=OB.OB_FinancialYearId  
+AND TD.LedgerId=OB.OB_LedgerId)  
+GROUP BY ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,OB.OB_LedgerId,ALM.LedgerName,ALM.ForInstId  
+END  
+  
+end  
+  
+  
+  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId )  
+SELECT 0,0,IsNull((SELECT Accounts.fnBalanceSheetAccountGroupWithAllChilds(AccountGroupId,'DR',@Guid,@IsIncludeAllChild)),0) as Debit  
+,IsNull((SELECT Accounts.fnBalanceSheetAccountGroupWithAllChilds(AccountGroupId,'CR',@Guid,@IsIncludeAllChild)),0) as Credit,  
+'false',AccountGroupId,AccountGroupName,ISNULL(@ForInstId,0) AS ForInstId  
+FROM Accounts.vAccountGroup as AG  
+WHERE 
+--AG.InstId=CONVERT(int, @InstId)  
+--AND 
+AG.GroupUnder=@AccountGroupId  
+  
+END  
+ELSE  
+BEGIN  -- It is a Special Report for Only to View Opening Balances                BY JASPAL  
+   
+  
+ INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName )  
+SELECT 0,'',ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,'true',OB.OB_LedgerId,ALM.LedgerName  
+FROM Accounts.vAccountLedgerOpeningBalance as  OB  
+INNER JOIN Accounts.vAccountLedger AS ALM ON OB.OB_LedgerId=ALM.LedgerId AND ALM.InstId=@InstId AND ALM.ForInstId=ob.ob_ForInstId  
+WHERE ALM.ForInstId=ISNULL(@ForInstId,ALM.ForInstId)  
+AND OB.OB_FinancialYearId=@FinancialYearId AND OB.OB_InstId=CONVERT(int, @InstId)  
+AND ALM.AccountGroupId=ISNULL(@AccountGroupId,ALM.AccountGroupId)  
+GROUP BY ob.OpeningBalanceDebit,ob.OpeningBalanceCredit,OB.OB_LedgerId,ALM.LedgerName  
+  
+  
+INSERT INTO @MyYTable(OpeningBalance,OpeningBalanceCrOrDr,Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId )  
+SELECT 0,0,IsNull((SELECT Accounts.fnBalanceSheetAccountGroupWithAllChilds(AccountGroupId,'DR',@Guid,@IsIncludeAllChild)),0) as Debit  
+,IsNull((SELECT Accounts.fnBalanceSheetAccountGroupWithAllChilds(AccountGroupId,'CR',@Guid,@IsIncludeAllChild)),0) as Credit,  
+'false',AccountGroupId,AccountGroupName,ISNULL(@ForInstId,0) AS ForInstId  
+FROM Accounts.vAccountGroup as AG  
+WHERE AG.InstId=CONVERT(int, @InstId)  
+AND AG.GroupUnder=@AccountGroupId  
+END  
+  
+if(@IsShowZeroBalance=0)-- Zero Option is using in Trial Balance Report  
+BEGIN  
+DELETE from @MyYTable WHERE ISNULL(Debit,0)=0 AND ISNULL(Credit,0)=0   
+END  
+  
+IF (@IsIncomeExpenditure=1)  
+BEGIN  
+-------------------///////////////// SELECT COMMAND IncomeExpenditure Debit ENTRY/////////////////////  
+  
+ select DISTINCT ISNULL(Debit,0) AS Debit,ISNULL(Credit,0) AS Credit,IsLedger  
+ ,AccountId,mydt.AccountGroupName as AccountGroupName,mydt.ForInstId,'Dr' AS DebitCredit,AGM.AccountGroupId from @MyYTable AS mydt   
+ INNER JOIN Accounts.AccountLedgerMaster as ALM ON mydt.AccountId=ALM.LedgerId  
+ INNER JOIN Accounts.AccountGroupMaster as AGM ON ALM.AccountGroupId=AGM.AccountGroupId  
+ INNER JOIN Accounts.AccountLedger AS AL ON AL.LedgerId=ALM.LedgerId  
+ WHERE EXISTS (SELECT AAC_ParentAccountGroupId FROM Accounts.AccountGroupWithAllChilds AGAC  
+ WHERE  AGAC.AAC_ParentAccountGroupId=AGM.AccountGroupId)  
+ --AND AL.InstId=CONVERT(int, @InstId) 
+ --AND mydt.ForInstId=ISNULL(@ForInstId,AL.ForInstId) 
+ AND AGM.Nature  IN ('I','E') AND ISNULL(Debit,0)>0   
+   
+ UNION ALL   
+-------------------///////////////// SELECT COMMAND IncomeExpenditure Debit ENTRY Only Captial Expenditure(Sch.D)/////////////////////  
+    select  SUM(ISNULL(Debit,0)) AS Debit,SUM(ISNULL(Credit,0)) AS Credit,'false'  
+ ,0,AGM.AccountGroupName as AccountGroupName,mydt.ForInstId,'Dr' AS DebitCredit,AGM.AccountGroupId from @MyYTable AS mydt   
+ INNER JOIN Accounts.AccountLedgerMaster as ALM ON mydt.AccountId=ALM.LedgerId  
+ INNER JOIN Accounts.AccountGroupMaster as AGM ON ALM.AccountGroupId=AGM.AccountGroupId  
+ INNER JOIN Accounts.AccountLedger AS AL ON AL.LedgerId=ALM.LedgerId  
+ WHERE --AL.InstId=CONVERT(int, @InstId) AND 
+ AGM.Nature='A' AND AGM.AccountGroupId=68 AND ISNULL(Debit,0)>0   
+ --AND mydt.ForInstId=ISNULL(@ForInstId,AL.ForInstId)   
+ GROUP BY AGM.AccountGroupName,mydt.ForInstId,AGM.AccountGroupId  
+ ORDER BY mydt.AccountGroupName  
+   
+  
+   
+  
+  
+   
+ -------------------///////////////// SELECT COMMAND IncomeExpenditure Credit ENTRY/////////////////////  
+ select DISTINCT  ISNULL(Debit,0) AS Debit,ISNULL(Credit,0) AS Credit,IsLedger  
+ ,AccountId,mydt.AccountGroupName,mydt.ForInstId,'Cr' AS DebitCredit,AGM.AccountGroupId from @MyYTable AS mydt   
+ INNER JOIN Accounts.AccountLedgerMaster as ALM ON mydt.AccountId=ALM.LedgerId  
+ INNER JOIN Accounts.AccountGroupMaster as AGM ON ALM.AccountGroupId=AGM.AccountGroupId  
+ INNER JOIN Accounts.AccountLedger AS AL ON AL.LedgerId=ALM.LedgerId  
+ WHERE EXISTS (SELECT AAC_ParentAccountGroupId FROM Accounts.AccountGroupWithAllChilds AGAC  
+ WHERE  AGAC.AAC_ParentAccountGroupId=AGM.AccountGroupId)  
+ --AND AL.InstId=CONVERT(int, @InstId) AND mydt.ForInstId=ISNULL(@ForInstId,mydt.ForInstId) 
+ AND AGM.Nature  IN ('I','E') AND ISNULL(Credit,0)>0  
+   
+   
+  -------------------///////////////// SELECT COMMAND IncomeExpenditure Debit ENTRY Only Depreciation/////////////////////  
+ if (@IsDepreciation=1)  
+ begin  
+   
+    select  SUM(ISNULL(Debit,0)) AS Debit,SUM(ISNULL(Credit,0)) AS Credit,'false'  
+ ,AGM.AccountGroupId,AGM.AccountGroupName as AccountGroupName,mydt.ForInstId,'Dr' AS DebitCredit,AGM.AccountGroupId from @MyYTable AS mydt   
+ INNER JOIN Accounts.AccountLedgerMaster as ALM ON mydt.AccountId=ALM.LedgerId  
+ INNER JOIN Accounts.AccountGroupMaster as AGM ON ALM.AccountGroupId=AGM.AccountGroupId  
+ INNER JOIN Accounts.AccountLedger AS AL ON AL.LedgerId=ALM.LedgerId  
+ WHERE AL.InstId=CONVERT(int, @InstId) AND AGM.Nature='D' AND AGM.AccountGroupId=135 AND ISNULL(Debit,0)>0   
+ AND mydt.ForInstId=ISNULL(@ForInstId,AL.ForInstId)   
+ GROUP BY AGM.AccountGroupName,mydt.ForInstId,AGM.AccountGroupId  
+ end  
+  
+ ----------------------------------------------------------------  
+   
+END  
+  
+ELSE  
+BEGIN  
+PRINT 'ddd'  
+  
+-------------------///////////////// SELECT COMMAND IncomeExpenditure /////////////////////  
+--select ISNULL((Debit),0) AS Debit,ISNULL((Credit),0) AS Credit,IsLedger  
+--,AccountId,AccountGroupName,ForInstId from @MyYTable    
+--ORDER BY IsLedger , AccountGroupName  
+  
+select ISNULL(sum(Debit),0) AS Debit,ISNULL(sum(Credit),0) AS Credit,IsLedger  
+,AccountId,AccountGroupName,ISNULL(@ForInstId,0) as ForInstId from @MyYTable    
+group by IsLedger,AccountId , AccountGroupName  
+ORDER BY IsLedger , AccountGroupName  
+  
+  
+END
+
+10. Create new procedure [Accounts].[CreateLedgerCommonIncomeExpendituteCollegeGroup]
+--EXEC [Accounts].[CreateLedgerCommonIncomeExpendituteCollegeGroup] 1,300010,0,8,1,0,'4/1/2019','3/22/2020',1,300010,0,'a27e61d6-2052-4a59-9ba0-1ef7fff027f8',0    
+
+ create proc  [Accounts].[CreateLedgerCommonIncomeExpendituteCollegeGroup]      
+(      
+@GroupId int,      
+@InstId int,      
+@DepartmentId int,      
+@FinancialYearId int,      
+@IsShowZeroBalance bit='False',      
+@ShowOnlyOpeningBalaces bit='False', -- It is a Special Report      
+@FromDate datetime,      
+@ToDate datetime,      
+@IsIncomeExpenditure bit='False',      
+@ForInstId int,      
+@AccountGroupId int=0,      
+@GuId varchar(50),      
+@IsShowOnlyOpeningBalacesJas bit='False' -- It is a Special Report      
+)      
+AS      
+IF @AccountGroupId=0 SET @AccountGroupId=NULL      
+IF @ForInstId=0 SET @ForInstId=NULL      
+      
+DECLARE  @MyYTable as table      
+(      
+[Id] [int] IDENTITY(1,1) NOT NULL,      
+Debit DECIMAL(18,2),      
+Credit DECIMAL(18,2),      
+IsLedger bit,      
+AccountId Int,      
+AccountGroupName varchar(200),      
+ForInstId int,      
+DebitCredit varchar(50),      
+AccountGroupId int      
+)      
+      
+DECLARE  @MyYTableScheduleD as table      
+(      
+[Id] [int] IDENTITY(1,1) NOT NULL,      
+Debit DECIMAL(18,2),      
+Credit DECIMAL(18,2),      
+IsLedger bit,      
+AccountId Int,      
+AccountGroupName varchar(200),      
+ForInstId int,      
+DebitCredit varchar(50),      
+AccountGroupId int      
+)      
+      
+      
+DECLARE  @MyTableDebit as table      
+(      
+[Id] [int] IDENTITY(1,1) NOT NULL,      
+Debit DECIMAL(18,2),      
+DAccountGroupName varchar(200),      
+DForInstId int,      
+DebitCredit varchar(50),      
+DAccountGroupId int      
+)      
+      
+DECLARE  @MyTableCredit as table      
+(      
+[Id] [int] IDENTITY(1,1) NOT NULL,      
+Credit DECIMAL(18,2),      
+CAccountGroupName varchar(200),      
+CForInstId int,      
+DebitCredit varchar(50),      
+CAccountGroupId int      
+)      
+     
+     
+PRINT '1'   
+INSERT INTO @MyYTable(Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId,DebitCredit,AccountGroupId)      
+EXEC [Accounts].[CreateLedgerCommonIncomeExpenditute] @GroupId=@GroupId,@InstId=@InstId,@DepartmentId=@DepartmentId,@FinancialYearId=@FinancialYearId      
+,@IsShowZeroBalance=@IsShowZeroBalance,@ShowOnlyOpeningBalaces=@ShowOnlyOpeningBalaces,@FromDate=@FromDate,@ToDate=@ToDate      
+,@IsIncomeExpenditure=@IsIncomeExpenditure,@ForInstId=@ForInstId,@AccountGroupId=@AccountGroupId,@GuId=@GuId,@IsShowOnlyOpeningBalacesJas=@IsShowOnlyOpeningBalacesJas      
+    
+   PRINT '2'  
+INSERT INTO @MyTableDebit(Debit,DAccountGroupName,DForInstId,DebitCredit)      
+SELECT  SUM(Debit) AS Debit,AccountInstTitle AS AccountGroupName,ForInstId,DebitCredit FROM @MyYTable      
+INNER JOIN vInst_Info ON ForInstId=Inst_Id WHERE  ISNULL(Debit,0)>0  AND DebitCredit='Dr'       
+GROUP BY ForInstId,AccountInstTitle,DebitCredit ORDER BY AccountInstTitle      
+      
+   
+      
+INSERT INTO @MyTableCredit(Credit,CAccountGroupName,CForInstId,DebitCredit)      
+SELECT  SUM(Credit) AS Credit,AccountInstTitle AS AccountGroupName,ForInstId,DebitCredit FROM @MyYTable      
+LEFT JOIN vInst_Info ON ForInstId=Inst_Id WHERE ISNULL(Credit,0)>0  AND DebitCredit='Cr'      
+GROUP BY ForInstId,AccountInstTitle,DebitCredit ORDER BY AccountInstTitle      
+      
+SELECT DISTINCT MT.ForInstId AS ForInstId1,TD1.Debit,DAccountGroupName AS AccountGroupName1,TC1.Credit,      
+CAccountGroupName AS AccountGroupName2 FROM @MyYTable AS MT      
+LEFT JOIN @MyTableDebit AS TD1 ON MT.ForInstId=TD1.DForInstId      
+LEFT JOIN @MyTableCredit AS TC1 ON MT.ForInstId=TC1.CForInstId      
+ORDER BY DAccountGroupName      
+      
+SELECT  SUM(Isnull(Debit,0)) AS Debit,ag.AccountGroupName,ag.AccountGroupId,T.DebitCredit,T.IsLedger       
+FROM Accounts.AccountGroupMaster  AS ag       
+LEFT JOIN @MyYTable AS T  on ag.AccountGroupId=T.AccountGroupId      
+WHERE  ag.AccountGroupId='68'       
+GROUP BY ag.AccountGroupName,ag.AccountGroupId,T.DebitCredit,T.IsLedger --Schedule -D      
+ORDER BY ag.AccountGroupName      
+      
+  
+---------------------///////////////// SELECT COMMAND IncomeExpenditure Debit ENTRY Only Depreciation/////////////////////      
+DECLARE  @MyYTableDepreciation as table      
+(      
+[Id] [int] IDENTITY(1,1) NOT NULL,      
+Debit DECIMAL(18,2),      
+Credit DECIMAL(18,2),      
+IsLedger bit,      
+AccountId Int,      
+AccountGroupName varchar(200),      
+ForInstId int,      
+DebitCredit varchar(50),      
+AccountGroupId int      
+)      
+      
+      
+INSERT INTO @MyYTableDepreciation(Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId,DebitCredit,AccountGroupId)      
+EXEC [Accounts].[CreateLedgerCommonIncomeExpenditute] @GroupId=@GroupId,@InstId=@InstId,@DepartmentId=@DepartmentId,@FinancialYearId=@FinancialYearId      
+,@IsShowZeroBalance=@IsShowZeroBalance,@ShowOnlyOpeningBalaces=@ShowOnlyOpeningBalaces,@FromDate=@FromDate,@ToDate=@ToDate      
+,@IsIncomeExpenditure=@IsIncomeExpenditure,@ForInstId=@ForInstId,@AccountGroupId=@AccountGroupId,@GuId=@GuId,@IsShowOnlyOpeningBalacesJas=@IsShowOnlyOpeningBalacesJas      
+,@IsDepreciation=1      
+      
+      
+ -------------------///////////////// SELECT COMMAND IncomeExpenditure Debit ENTRY Only Depreciation/////////////////////      
+SELECT Debit,Credit,IsLedger,AccountId,AccountGroupName,ForInstId FROM @MyYTableDepreciation WHERE AccountId='135'      
+ORDER BY AccountGroupName      
+--GROUP BY AccountGroupName,AccountId    
+
+11.Create new method CreateLedgerCommonIncomeExpenditute in ReportsController.cs Line 321
+
+12. Create new method CreateLedgerCommonIncomeExpenditute in ReportsManager.cs Line 1662
+
+13.Create new method CreateLedgerCommonIncomeExpenditute in AccountsAppApi.cs Line 1436
+
+14. Add new h4 tag and give id to existing h4 tag in _ledgerIncomeExpendituteReport.cshtml as below:Line 7 and 8 
+
+                <h4 class="modal-title" id="inexp">Income Expenditure</h4>
+                <h4 class="modal-title" id="cinexp">Common Income Expenditure</h4>
+				
+15.Add below line in IncomeExpenditureDetails.js to hide common income expenditure heading Line 33
+$('#cinexp').css("display", "none");

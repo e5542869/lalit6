@@ -1,0 +1,52 @@
+1. Add new row entry in financial year table as below or 2020-2021
+9	2020-2021	1	2020-04-01 00:00:00.000	2021-03-31 00:00:00.000
+
+2.Update financial 2019-2020 financial year and change its iscurrent to 0 from 1.
+
+3.Changes needs to be done in AddTransaction.js comment existing niche wala code and uncomment upar wala code as below:
+Also add check of 2017 financial year to make sure that it allowed to add transaction for year 2016-2017
+
+function getCurrentFiscalYear() {
+    var selectedFinYear = new Date(userData.FinancialYearEndDate);
+    var todayDate = new Date();
+
+    if (selectedFinYear.getFullYear() == todayDate.getFullYear() || userData.FinancialYearEndDate.indexOf("2017") != "-1") {
+        var month = selectedFinYear.getMonth() + 1;
+        if (selectedFinYear.getDay() == 0) {
+            $('#txtDate').val(selectedFinYear.getDate() - 1 + "." + month + "." + selectedFinYear.getFullYear());
+        }
+        else
+            $('#txtDate').val(selectedFinYear.getDate() + "." + month + "." + selectedFinYear.getFullYear());
+    }
+    else {
+        var month = todayDate.getMonth() + 1;
+        $('#txtDate').val(todayDate.getDate() + "." + month + "." + todayDate.getFullYear());
+    }
+}
+
+//function getCurrentFiscalYear() {   //changed on 22-02-20
+//    if (userData.FinancialYearEndDate.indexOf("2017") != "-1") {
+//        var selectedFinYear = new Date(userData.FinancialYearEndDate);
+//    }
+//    else {
+//        var selectedFinYear = new Date(userData.FinancialYearStartDate);
+//}
+//    var todayDate = new Date();
+
+//    if (selectedFinYear.getFullYear() == todayDate.getFullYear() || userData.FinancialYearEndDate.indexOf("2017") != "-1") {
+//        var month = selectedFinYear.getMonth() + 1;
+//        if (selectedFinYear.getDay() == 0) {
+//            $('#txtDate').val(selectedFinYear.getDate() - 1 + "." + month + "." + selectedFinYear.getFullYear());
+//        }
+//        else
+//            $('#txtDate').val(selectedFinYear.getDate() + "." + month + "." + selectedFinYear.getFullYear());
+//    }
+//    else {
+//        var month = todayDate.getMonth() + 1;
+//        $('#txtDate').val(todayDate.getDate() + "." + month + "." + todayDate.getFullYear());
+//    }
+//}
+
+4. Changes done in ModifyTransactions.js to allow update for 31 march 2020 as well as below:
+
+  if (transactionDate != todayDate && transactionDate != '31.3.2017' && transactionDate != '31.3.2020') {
